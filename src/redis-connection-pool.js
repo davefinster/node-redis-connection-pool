@@ -67,33 +67,49 @@ function RedisConnectionPool(uid, cfg) {
   this.options        = (typeof cfg.options === 'object') ? cfg.options : null;
   this.database       = (typeof cfg.database === 'number') ? cfg.database : 0;
 
+  this.configCallback = (typeof cfg.configCallback === 'function') ? cfg.configCallback : null;
+
   this.blocking_support = true;
   this.version_array    = undefined;
   this.version_string   = undefined;
 
   var self = this;
 
+  function createClient(port, host, options) {
+    var client = redis.createClient(port, host, options);
+    client.__name = "client" + i;
+    i = i + 1;
+
+    if (options.database !== undefined) {
+      self.database = options.database;
+    } else {
+      self.database = self.database || 0;
+    }
+
+    debug('selecting database ' + self.database);
+    client.on('error', function (err) {
+      debug(err);
+    });
+    
+    client.on('ready', function () {
+      client.select(self.database, function (err) {
+        debug('2. selected database: ' + client.selected_db);
+        callback(err, client);
+      });
+    });
+  }
+
   var i = 0;
   this.pool = new Pool({
     name: self.uid,
     create: function (callback) {
-      var client = redis.createClient(self.port, self.host, self.options);
-      client.__name = "client" + i;
-      i = i + 1;
-
-      self.database = self.database || 0;
-
-      debug('selecting database ' + self.database);
-      client.on('error', function (err) {
-        debug(err);
-      });
-      
-      client.on('ready', function () {
-        client.select(self.database, function (err) {
-          debug('2. selected database: ' + client.selected_db);
-          callback(err, client);
-        });
-      });
+      if (self.configCallback !== null) {
+        return self.configCallback(self.uid, function(host, port, options) {
+          return createClient(host, port, options);
+        })
+      } else {
+        return createClient(self.host, self.port, self.options); 
+      }
     },
     destroy: function (client) {
       return client.quit();
