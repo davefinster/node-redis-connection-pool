@@ -74,8 +74,8 @@ function RedisConnectionPool(uid, cfg) {
   this.version_string   = undefined;
 
   var self = this;
-
-  function createClient(port, host, options) {
+  
+  function createClient(host, port, options, callback) {
     var client = redis.createClient(port, host, options);
     client.__name = "client" + i;
     i = i + 1;
@@ -105,10 +105,10 @@ function RedisConnectionPool(uid, cfg) {
     create: function (callback) {
       if (self.configCallback !== null) {
         return self.configCallback(self.uid, function(host, port, options) {
-          return createClient(host, port, options);
+          return createClient(host, port, options, callback);
         })
       } else {
-        return createClient(self.host, self.port, self.options); 
+        return createClient(self.host, self.port, self.options, callback); 
       }
     },
     destroy: function (client) {
